@@ -1,0 +1,633 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #include <stdio.h>\
+#include <stdlib.h>\
+#include <string.h>\
+\
+#define MAX_SIZE 100\
+#define HASH_TABLE_SIZE 21 // A prime number for better distribution\
+#define MAX_NAME_LENGTH 5\
+\
+typedef struct Town \{\
+    char district[MAX_SIZE];\
+    char town[MAX_SIZE];\
+    int population;\
+    int elevation;\
+    char has_municipality[4]; // For "yes" or "no"\
+\} Town;\
+\
+typedef struct Node \{\
+    Town data;\
+    struct Node *left;\
+    struct Node *right;\
+    int height;\
+\} Node;\
+\
+typedef struct HashNode \{\
+    Town data;\
+    int is_occupied;\
+\} HashNode;\
+\
+// Hash Table\
+HashNode hash_table[HASH_TABLE_SIZE];\
+\
+// Functions for AVL Tree\
+int max(int a, int b) \{\
+    return (a > b) ? a : b;\
+\}\
+\
+int height(Node *n) \{\
+    return (n == NULL) ? 0 : n->height;\
+\}\
+\
+Node *create_node(Town data) \{\
+    Node *node = (Node *)malloc(sizeof(Node));\
+    if (!node) \{\
+        fprintf(stderr, "Memory allocation failed!\\n");\
+        exit(EXIT_FAILURE);\
+    \}\
+    node->data = data;\
+    node->left = node->right = NULL;\
+    node->height = 1;\
+    return node;\
+\}\
+\
+int get_balance(Node *n) \{\
+    return (n == NULL) ? 0 : height(n->left) - height(n->right);\
+\}\
+\
+Node *right_rotate(Node *y) \{\
+    Node *x = y->left;\
+    Node *T2 = x->right;\
+\
+    x->right = y;\
+    y->left = T2;\
+\
+    y->height = max(height(y->left), height(y->right)) + 1;\
+    x->height = max(height(x->left), height(x->right)) + 1;\
+\
+    return x;\
+\}\
+\
+Node *left_rotate(Node *x) \{\
+    Node *y = x->right;\
+    Node *T2 = y->left;\
+\
+    y->left = x;\
+    x->right = T2;\
+\
+    x->height = max(height(x->left), height(x->right)) + 1;\
+    y->height = max(height(y->left), height(y->right)) + 1;\
+\
+    return y;\
+\}\
+\
+Node *insert(Node *T, Town data) \{\
+    if (T == NULL) \{\
+        // Create and return a one-node tree\
+        T = malloc(sizeof(Node));\
+        if (T == NULL) \{\
+            printf("Out of space!!!\\n");\
+            return NULL;\
+        \}\
+        T->data = data;         // Set the Town data\
+        T->height = 1;          // New node has height 1\
+        T->left = T->right = NULL; // Initialize children to NULL\
+    \} else if (strcmp(data.town, T->data.town) < 0) \{\
+        // Insert into the left subtree\
+        T->left = insert(T->left, data);\
+        // Check for imbalance and rotate if necessary\
+        if (height(T->left) - height(T->right) == 2) \{\
+            if (strcmp(data.town, T->left->data.town) < 0)\
+                T = right_rotate(T); // Single right rotation\
+            else\
+                T = left_rotate(T->left), T = right_rotate(T); // Double left-right rotation\
+        \}\
+    \} else if (strcmp(data.town, T->data.town) > 0) \{\
+        // Insert into the right subtree\
+        T->right = insert(T->right, data);\
+        // Check for imbalance and rotate if necessary\
+        if (height(T->right) - height(T->left) == 2) \{\
+            if (strcmp(data.town, T->right->data.town) > 0)\
+                T = left_rotate(T); // Single left rotation\
+            else\
+                T = right_rotate(T->right), T = left_rotate(T); // Double right-left rotation\
+        \}\
+    \}\
+    // Update the height of the current node\
+    T->height = 1 + max(height(T->left), height(T->right));\
+    return T; // Return the updated tree\
+\}\
+\
+Node *min_value_node(Node *node) \{\
+    Node *current = node;\
+    while (current->left != NULL)\
+        current = current->left;\
+    return current;\
+\}\
+\
+Node *delete_node(Node *root, char *town) \{\
+    // If the tree is empty, there's nothing to delete\
+    if (root == NULL)\
+        return root;\
+\
+    // Traverse the tree to find the node to delete\
+    if (strcmp(town, root->data.town) < 0) \{\
+        // If the town name is lexicographically smaller, move to the left subtree\
+        root->left = delete_node(root->left, town);\
+    \} else if (strcmp(town, root->data.town) > 0) \{\
+        // If the town name is lexicographically larger, move to the right subtree\
+        root->right = delete_node(root->right, town);\
+    \} else \{\
+        // Node to delete is found (town matches root->data.town)\
+\
+        // Case 1 & 2: Node has one child or no children\
+        if (root->left == NULL || root->right == NULL) \{\
+            Node *temp;\
+            // Assign the non-NULL child (or NULL if both are NULL) to temp\
+            if (root->left) \{\
+                temp = root->left;\
+            \} else \{\
+                temp = root->right;\
+            \}\
+            free(root); // Free the current node's memory\
+            return temp; // Return the non-NULL child or NULL\
+        \}\
+\
+        // Case 3: Node has two children\
+        // Find the in-order successor (smallest node in the right subtree)\
+        Node *temp = min_value_node(root->right);\
+\
+        // Replace the current node's data with the in-order successor's data\
+        root->data = temp->data;\
+\
+        // Delete the in-order successor from the right subtree\
+        root->right = delete_node(root->right, temp->data.town);\
+    \}\
+\
+    // Update the height of the current node\
+    root->height = 1 + max(height(root->left), height(root->right));\
+\
+    // Calculate the balance factor to check if the node is balanced\
+    int balance = get_balance(root);\
+\
+    // Case 1: Left-Left (LL) Imbalance\
+    if (balance > 1 && get_balance(root->left) >= 0)\
+        return right_rotate(root);\
+\
+    // Case 2: Left-Right (LR) Imbalance\
+    if (balance > 1 && get_balance(root->left) < 0) \{\
+        root->left = left_rotate(root->left);\
+        return right_rotate(root);\
+    \}\
+\
+    // Case 3: Right-Right (RR) Imbalance\
+    if (balance < -1 && get_balance(root->right) <= 0)\
+        return left_rotate(root);\
+\
+    // Case 4: Right-Left (RL) Imbalance\
+    if (balance < -1 && get_balance(root->right) > 0) \{\
+        root->right = right_rotate(root->right);\
+        return left_rotate(root);\
+    \}\
+\
+    // Return the updated root node\
+    return root;\
+\}\
+\
+//give all data information for the AVL tree \
+void in_order(Node *root) \{\
+    if (root != NULL) \{\
+        in_order(root->left);\
+        printf("%s:%s:%d:%d:%s\\n", root->data.district, root->data.town, root->data.population, root->data.elevation, root->data.has_municipality);\
+        in_order(root->right);\
+    \}\
+\}\
+\
+void list_towns_by_population(Node *root, int min_population) \{\
+    // Check if the current node is not NULL\
+    if (root != NULL) \{\
+        list_towns_by_population(root->left, min_population);\
+        if (root->data.population > min_population)\
+            printf("%s:%s:%d:%d:%s\\n", root->data.district, root->data.town, root->data.population, root->data.elevation, root->data.has_municipality);\
+        list_towns_by_population(root->right, min_population);\
+    \}\
+\}\
+\
+void list_towns_by_municipality(Node *root, const char *has_municipality) \{\
+    if (root != NULL) \{\
+        list_towns_by_municipality(root->left, has_municipality);\
+        if (strcmp(root->data.has_municipality, has_municipality) == 0)\
+            printf("%s:%s:%d:%d:%s\\n", root->data.district, root->data.town, root->data.population, root->data.elevation, root->data.has_municipality);\
+        list_towns_by_municipality(root->right, has_municipality);\
+    \}\
+\}\
+\
+void save_to_file(Node *root, FILE *file) \{\
+    if (root != NULL) \{\
+        fprintf(file, "%s:%s:%d:%d:%s\\n", root->data.district, root->data.town, root->data.population, root->data.elevation, root->data.has_municipality);\
+        save_to_file(root->left, file);\
+        save_to_file(root->right, file);\
+    \}\
+\}\
+\
+Node *find_and_update(Node *root, const char *town_name) \{\
+    if (root == NULL) \{\
+        printf("Town not found .....\\n");\
+        return NULL;\
+    \}\
+\
+    if (strcmp(town_name, root->data.town) < 0) \{\
+        root->left = find_and_update(root->left, town_name);\
+    \} else if (strcmp(town_name, root->data.town) > 0) \{\
+        root->right = find_and_update(root->right, town_name);\
+    \} else \{\
+        printf("Town found ..... Update the details.\\n");\
+        printf("New population: ");\
+        scanf("%d", &root->data.population);\
+        printf("New elevation: ");\
+        scanf("%d", &root->data.elevation);\
+        printf("Has municipality (yes/no): ");\
+        scanf("%s", root->data.has_municipality);\
+    \}\
+\
+    return root;\
+\}\
+\
+// Hash Table Utility Functions\
+int hash_function(const char *key) \{\
+    int hash = 0; // Initialize the hash value to 0\
+    for (int i = 0; i <= 5 && key[i] != '\\0'; i++) \{\
+        hash = ((hash << 5) + key[i]) % HASH_TABLE_SIZE;\
+    \}\
+    return hash;\
+\}\
+//Ensures the hash table is in a clean and consistent state before any operations \
+void initialize_hash_table() \{\
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) \{\
+        hash_table[i].is_occupied = 0;\
+    \}\
+\}\
+\
+void insert_into_hash_table(Town town) \{\
+    char key[6];                                   // Key  is the first 5 characters + null terminator\
+    strncpy(key, town.town, 5);                    // Copy the first 5 characters\
+    key[5] = '\\0';                                 // Ensure the key is null-terminated\
+    int index = hash_function(key);                // Calculate hash index\
+    int original_index = index;                    // Store the original index to detect full table loops\
+    int collisions = 0;                            // Track the number of collisions during insertion\
+\
+    // Handle collisions using linear probing\
+    while (hash_table[index].is_occupied) \{\
+        index = (index + 1) % HASH_TABLE_SIZE;     // Move to the next slot \
+        collisions++;                              // Increment the collision counter\
+\
+        // if this case true then the table is full\
+        if (index == original_index) \{\
+            printf("Hash table is full .... Cannot insert %s.\\n", town.town);\
+            return;     // Exit the function without inserting\
+        \}\
+    \}\
+\
+    // Insert the town into the first available slot\
+    hash_table[index].data = town;                 // Store the town data in the chosen slot\
+    hash_table[index].is_occupied = 1;             // Mark the slot as occupied\
+\
+    if (collisions > 0) \{\
+        printf("Inserted %s with %d collisions.\\n", town.town, collisions);\
+    \} else \{\
+        printf("Inserted %s without collisions.\\n", town.town);\
+    \}\
+\}\
+\
+\
+void print_hash_table() \{\
+    printf("The Hash Table:\\n");\
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) \{\
+        if (hash_table[i].is_occupied) \{\
+            printf("[%d]: %s (%d)\\n", i, hash_table[i].data.town, hash_table[i].data.population);\
+        \} else \{\
+            printf("[%d]: EMPTY\\n", i);\
+        \}\
+    \}\
+\}\
+// the total number of filled slots in the hash table/the size\
+float calculate_load_factor() \{\
+    float filled_slots = 0;\
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) \{\
+        if (hash_table[i].is_occupied) \{\
+            filled_slots++;\
+        \}\
+    \}\
+    return filled_slots / HASH_TABLE_SIZE;\
+\}\
+void delete_from_hash_table(const char *key) \{\
+    // Prepare the truncated key (first 5 characters of the town name)\
+    char truncated_key[6];                         // Key buffer (5 characters + null terminator)\
+    strncpy(truncated_key, key, 5);                // Copy the first 5 characters of the key\
+    truncated_key[5] = '\\0';                       // Ensure the key is null-terminated\
+\
+    // Calculate the initial index using the hash function\
+    int index = hash_function(truncated_key);      // Compute hash index\
+    int original_index = index;                    // Store the original index for full-table loop detection\
+\
+    // Search for the key to delete using linear probing\
+    while (hash_table[index].is_occupied) \{        // Continue as long as the slot is occupied\
+        // Check if the stored town matches the key\
+        if (strncmp(hash_table[index].data.town, key, 5) == 0) \{\
+            // Key found: Mark the slot as unoccupied and print a message\
+            hash_table[index].is_occupied = 0;     // Mark the slot as empty\
+            printf("Deleted %s from hash table.\\n", key);\
+            return;                                // Exit after deletion\
+        \}\
+\
+        // Move to the next slot \
+        index = (index + 1) % HASH_TABLE_SIZE;     // Circular wrap-around\
+        if (index == original_index) \{\
+            break;\
+        \}\
+    \}\
+\
+    // Key not found: Print a message\
+    printf("%s not found in hash table.\\n", key);\
+\}\
+\
+void search_in_hash_table(const char *key) \{\
+   \
+    char truncated_key[6];                         // Key buffer (5 characters + null terminator)\
+    strncpy(truncated_key, key, 5);                // Copy the first 5 characters of the key\
+    truncated_key[5] = '\\0';                       // Ensure the key is null-terminated\
+    int i = hash_function(truncated_key);      // Compute hash index\
+    int original_index = i;                    // Store the original index for full-table loop detection\
+    int collisions = 0;                            // Track the number of collisions during the search\
+\
+    // Search for the key using linear probing\
+    while (hash_table[i].is_occupied) \{        // Continue as long as the slot is occupied\
+        // Check if the stored town matches the key\
+        if (strncmp(hash_table[i].data.town, key, 5) == 0) \{\
+            // Key found: Print the result and number of collisions\
+            printf("Found %s at index %d with %d collisions.\\n", key, i, collisions);\
+            return;                                // Exit after finding the key\
+        \}\
+\
+        // Move to the next slot \
+        i = (i + 1) % HASH_TABLE_SIZE;     // Circular wrap-around\
+        collisions++;                              // Increment collision counter\
+        if (i == original_index) \{\
+            break;\
+        \}\
+    \}\
+    // Key not found: Print a message\
+    printf("%s not found in hash table.\\n", key);\
+\}\
+\
+void save_hash_table_to_file(const char *filename) \{\
+    FILE *file = fopen(filename, "w");\
+    if (!file) \{\
+        perror("Error opening file .....");\
+        return;\
+    \}\
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) \{\
+        if (hash_table[i].is_occupied) \{\
+            fprintf(file, "%s:%s:%d:%d:%s\\n", hash_table[i].data.district, hash_table[i].data.town, hash_table[i].data.population, hash_table[i].data.elevation, hash_table[i].data.has_municipality);\
+        \}\
+    \}\
+    fclose(file);\
+    printf("Hash table saved to '%s'.\\n", filename);\
+\}\
+\
+void load_tree_from_file(Node **root, const char *filename) \{\
+    FILE *file = fopen(filename, "r");\
+    if (!file) \{\
+        perror("Error opening file .....");\
+        return;\
+    \}\
+\
+    char line[256]; // Buffer to hold each line\
+    while (fgets(line, sizeof(line), file)) \{\
+        Town town;\
+        char *token;\
+\
+        // Tokenize and assign to the Town structure\
+        token = strtok(line, ":");       // Get district\
+        if (token) strcpy(town.district, token);\
+\
+        token = strtok(NULL, ":");      // Get town name\
+        if (token) strcpy(town.town, token);\
+\
+        token = strtok(NULL, ":");      // Get population\
+        if (token) town.population = atoi(token);\
+\
+        token = strtok(NULL, ":");      // Get elevation\
+        if (token) town.elevation = atoi(token);\
+\
+        token = strtok(NULL, ":\\n");    // Get municipality status\
+        if (token) strcpy(town.has_municipality, token);\
+\
+        // Insert the parsed Town into the AVL tree\
+        *root = insert(*root, town);\
+    \}\
+\
+    fclose(file);\
+\}\
+\
+int main() \{\
+    // Initialize AVL tree root and hash table\
+    Node *root = NULL;\
+    initialize_hash_table();\
+\
+    // Load AVL Tree from file\
+    load_tree_from_file(&root, "districts.txt");\
+\
+    int choice; // Variable to store the user's menu choice\
+    do \{\
+        // Display the main menu to the user\
+        printf("\\nMain Menu:\\n");\
+        printf("1. Insert a new town\\n");\
+        printf("2. Update a town's information\\n");\
+        printf("3. List towns in alphabetical order\\n");\
+        printf("4. List towns with population greater than an input\\n");\
+        printf("5. List towns by municipality status\\n");\
+        printf("6. Delete a town\\n");\
+        printf("7. Save towns to file\\n");\
+        printf("8. Create hash table from file\\n");\
+        printf("9. Show the operations on hash table\\n");\
+        printf("10. Exit\\n");\
+        printf("Enter your choice: ");\
+        scanf("%d", &choice);\
+\
+        // Handle user choice with a switch-case structure\
+        switch (choice) \{\
+            case 1: \{\
+                // Case 1: Insert a new town\
+                Town town; // Create a new town object\
+                printf("Enter district: ");\
+                scanf("%s", town.district);\
+                printf("Enter town: ");\
+                scanf("%s", town.town);\
+                printf("Enter population: ");\
+                scanf("%d", &town.population);\
+                printf("Enter elevation: ");\
+                scanf("%d", &town.elevation);\
+                printf("Has municipality (yes/no): ");\
+                scanf("%s", town.has_municipality);\
+                root = insert(root, town); // Add the town to the AVL tree\
+                break;\
+            \}\
+            case 2: \{\
+                // Case 2: Update a town's information\
+                char town_name[MAX_SIZE];\
+                printf("Enter the town name to update: ");\
+                scanf("%s", town_name);\
+                find_and_update(root, town_name); // Search and update town information\
+                break;\
+            \}\
+            case 3:\
+                // Case 3: List towns in alphabetical order\
+                printf("Towns in alphabetical order:\\n");\
+                in_order(root); // Perform in-order traversal of AVL tree\
+                break;\
+            case 4: \{\
+                // Case 4: List towns with population greater than an input\
+                int min_population;\
+                printf("Enter minimum population: ");\
+                scanf("%d", &min_population);\
+                printf("Towns with population greater than %d:\\n", min_population);\
+                list_towns_by_population(root, min_population);\
+                break;\
+            \}\
+            case 5: \{\
+                // Case 5: List towns by municipality status\
+                char municipality_status[4];\
+                printf("Enter municipality status (yes/no): ");\
+                scanf("%s", municipality_status);\
+                printf("Towns with municipality status '%s':\\n", municipality_status);\
+                list_towns_by_municipality(root, municipality_status);\
+                break;\
+            \}\
+            case 6: \{\
+                // Case 6: Delete a town from the AVL tree\
+                char town_name[MAX_SIZE];\
+                printf("Enter the town name to delete: ");\
+                scanf("%s", town_name);\
+                root = delete_node(root, town_name); // Remove the town\
+                break;\
+            \}\
+            case 7: \{\
+                // Case 7: Save towns to a file\
+                FILE *file = fopen("towns.txt", "w");\
+                if (!file) \{\
+                    perror("Error opening file");\
+                    break;\
+                \}\
+                save_to_file(root, file); // Save AVL tree data to file\
+                fclose(file);\
+                printf("Towns saved to file 'towns.txt'\\n");\
+                break;\
+            \}\
+            case 8: \{\
+                // Case 8: Create a hash table from file data\
+                FILE *file = fopen("towns.txt", "r");\
+                if (!file) \{\
+                    perror("Error opening file");\
+                    break;\
+                \}\
+                Town town;\
+                // Read file data and insert into hash table\
+                while (fscanf(file, "%[^:]:%[^:]:%d:%d:%s\\n", town.district, town.town, &town.population, &town.elevation, town.has_municipality) != EOF) \{\
+                    insert_into_hash_table(town);\
+                \}\
+                fclose(file);\
+                printf("Hash table created from file 'towns.txt'\\n");\
+                break;\
+            \}\
+            case 9: \{\
+                // Case 9: Perform operations on the hash table\
+                int hash_choice;\
+                do \{\
+                    // Display hash table menu\
+                    printf("\\nHash Table Menu:\\n");\
+                    printf("1. Print hash table\\n");\
+                    printf("2. Print size and load factor\\n");\
+                    printf("3. Insert into hash table\\n");\
+                    printf("4. Search in hash table\\n");\
+                    printf("5. Delete from hash table\\n");\
+                    printf("6. Save hash table to file\\n");\
+                    printf("7. Exit hash table menu\\n");\
+                    printf("Enter your choice: ");\
+                    scanf("%d", &hash_choice);\
+\
+                    switch (hash_choice) \{\
+                        case 1:\
+                            print_hash_table(); // Print the hash table contents\
+                            break;\
+                        case 2:\
+                            // Display hash table size and load factor\
+                            printf("Hash table size: %d\\n", HASH_TABLE_SIZE);\
+                            printf("Load factor: %.2f\\n", calculate_load_factor());\
+                            break;\
+                        case 3: \{\
+                            // Insert a new town into the hash table\
+                            Town town;\
+                            printf("Enter district: ");\
+                            scanf("%s", town.district);\
+                            printf("Enter town: ");\
+                            scanf("%s", town.town);\
+                            printf("Enter population: ");\
+                            scanf("%d", &town.population);\
+                            printf("Enter elevation: ");\
+                            scanf("%d", &town.elevation);\
+                            printf("Has municipality (yes/no): ");\
+                            scanf("%s", town.has_municipality);\
+                            insert_into_hash_table(town);\
+                            break;\
+                        \}\
+                        case 4: \{\
+                            // Search for a town in the hash table\
+                            char town_name[MAX_NAME_LENGTH + 1];\
+                            printf("Enter town name to search: ");\
+                            scanf("%s", town_name);\
+                            search_in_hash_table(town_name);\
+                            break;\
+                        \}\
+                        case 5: \{\
+                            // Delete a town from the hash table\
+                            char town_name[MAX_NAME_LENGTH + 1];\
+                            printf("Enter town name to delete: ");\
+                            scanf("%s", town_name);\
+                            delete_from_hash_table(town_name);\
+                            break;\
+                        \}\
+                        case 6:\
+                            // Save hash table data to file\
+                            save_hash_table_to_file("towns.txt");\
+                            break;\
+                        case 7:\
+                            printf("Exiting hash table menu...\\n");\
+                            break;\
+                        default:\
+                            printf("Invalid choice. Try again.\\n");\
+                            break;\
+                    \}\
+                \} while (hash_choice != 7);\
+                break;\
+            \}\
+            case 10:\
+                // Exit the program\
+                printf("Exiting program... Have a nice day :)\\n");\
+                break;\
+            default:\
+                // Handle invalid menu choices\
+                printf("Invalid choice. Please try again.\\n");\
+                break;\
+        \}\
+    \} while (choice != 10);\
+\
+    return 0;\
+\}\
+}
